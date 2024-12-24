@@ -1,0 +1,2 @@
+slangc src/shaders/test.slang -target metal -stage vertex -entry vertexMain -o src/shaders/metal/test.vertex.msl
+slangc src/shaders/test.slang -target metal -stage fragment -entry fragmentMain -o src/shaders/metal/test.fragment.msl
