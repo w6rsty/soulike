@@ -28,6 +28,8 @@ int main(int argc, char *argv[])
     auto pipeline = resources.GetPipeline("default");
     assert(pipeline);
 
+    resources.LoadModel("/Users/w6rsty/Downloads/bunny.glb");
+
     bool running = true;
     while (running) {
         SDL_Event event;

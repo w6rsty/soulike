@@ -1,86 +1,12 @@
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define JSON_NOEXCEPTION
+#define TINYGLTF_NOEXCEPTION
+#include <tiny_gltf.h>
+
 #include "ResourceManager.hpp"
 #include "Logger.hpp"
-
-auto Script::ReadArrayLength(lua_State* L) -> int
-{
-    return lua_rawlen(L, -1);
-}
-
-auto Script::PushTable(lua_State* L, const char* key) -> bool
-{
-    lua_getglobal(L, key);
-    if (!lua_istable(L, -1))
-    {
-        SO_ERROR("Table not found: {}", key);
-        return false;
-    }
-    return true;
-}
-
-void Script::Pop(lua_State* L, int n)
-{
-    lua_pop(L, n);
-}
-
-auto Script::Load(lua_State* L, std::filesystem::path const& path) -> bool
-{
-    if (luaL_loadfile(L, path.c_str()) || lua_pcall(L, 0, 0, 0))
-    {
-        SO_ERROR("Error loading script: {}", lua_tostring(L, -1));
-        lua_pop(L, 1); // pop error message
-        return false;
-    }
-
-    return true;
-}
-
-auto Script::ReadStringField(lua_State* L, const char* key) -> std::optional<std::string>
-{
-    lua_getfield(L, -1, key);
-    if (!lua_isstring(L, -1)) {
-        lua_pop(L, 1);
-        return std::nullopt;
-    }
-    std::string value = lua_tostring(L, -1);
-    lua_pop(L, 1);
-    return value;
-}
-
-auto Script::ReadFloatingField(lua_State* L, const char* key) -> std::optional<float>
-{
-    lua_getfield(L, -1, key);
-    if (!lua_isnumber(L, -1)) {
-        lua_pop(L, 1);
-        return std::nullopt;
-    }
-    float value = lua_tonumber(L, -1);
-    lua_pop(L, 1);
-    return value;
-}
-
-auto Script::ReadIntegerField(lua_State* L, const char* key) -> std::optional<int>
-{
-    lua_getfield(L, -1, key);
-    if (!lua_isinteger(L, -1)) {
-        lua_pop(L, 1);
-        return std::nullopt;
-    }
-    int value = lua_tointeger(L, -1);
-    lua_pop(L, 1);
-    return value;
-}
-
-auto Script::ReadBooleanField(lua_State* L, const char* key) -> std::optional<bool>
-{
-    lua_getfield(L, -1, key);
-    if (!lua_isboolean(L, -1)) {
-        lua_pop(L, 1);
-        return std::nullopt;
-    }
-    bool value = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-    return value;
-}
 
 namespace {
     ResourceManager*       s_instance{ nullptr };
@@ -103,7 +29,7 @@ void ResourceManager::Initialize(std::filesystem::path const& root, SDL_GPUDevic
     s_instance->m_device = device;
 
     std::filesystem::path prelude_files = root/"preludes";
-        for (auto& entry : std::filesystem::directory_iterator(prelude_files))
+    for (auto& entry : std::filesystem::directory_iterator(prelude_files))
     {
         std::filesystem::path path = entry.path();
         if (path.extension().string() == ".lua")
@@ -167,6 +93,18 @@ void ResourceManager::Destroy()
         s_instance = nullptr;
         s_lua_state = nullptr;
     }
+}
+
+auto ResourceManager::LoadModel(std::filesystem::path const& path) -> bool
+{
+    tinygltf::Model model{};
+    tinygltf::TinyGLTF loader{};
+    std::string err{};
+    std::string warn{};
+    bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
+
+
+    return ret;
 }
 
 auto ResourceManager::GetShader(std::string const& name) -> SDL_GPUShader*
@@ -255,4 +193,111 @@ auto ResourceManager::Slangc(SlangcCompileOption const& option) -> bool
     }
     SO_INFO("Shader compiled: {}", option.output_file.string());
     return result == 0;
+}
+
+void ResourceManager::DebugLuaStack(lua_State* L)
+{
+    std::string output = "Lua stack:\n";
+
+    for (int i = 1; i <= lua_gettop(L); i++)
+    {
+        switch (lua_type(L, i))
+        {
+        case LUA_TSTRING:
+            output += std::format("[{}] string: {}\n", i, lua_tostring(L, i));
+            break;
+        case LUA_TBOOLEAN:
+            output += std::format("[{}] boolean: {}\n", i, lua_toboolean(L, i) ? "true" : "false");
+            break;
+        case LUA_TNUMBER:
+            output += std::format("[{}] number: {}\n", i, lua_tonumber(L, i));
+            break;
+        case LUA_TTABLE:
+            output += std::format("[{}] table\n", i);
+            break;
+        case LUA_TFUNCTION:
+            output += std::format("[{}] function\n", i);
+            break;
+        case LUA_TUSERDATA:
+            output += std::format("[{}] userdata\n", i);
+            break;
+        case LUA_TLIGHTUSERDATA:
+            output += std::format("[{}] light userdata\n", i);
+            break;
+        case LUA_TNIL:
+            output += std::format("[{}] nil\n", i);
+            break;
+        default:
+            output += std::format("[{}] unknown type\n", i);
+            break;
+        }
+    }
+
+    SO_INFO("{}", output);
+}
+
+void ResourceManager::DebugLuaShowTable(lua_State *L) {
+    if (!lua_istable(L, -1))
+    {
+        SO_WARN("Not a table");
+        return;
+    }
+
+    std::string output = "Lua table:\n";
+    lua_pushnil(L);
+    while (lua_next(L, -2) != 0)
+    {
+        std::string key, value;
+
+        if (lua_type(L, -2) == LUA_TSTRING)
+        {
+            key = std::format("\"{}\"", lua_tostring(L, -2));
+        }
+        else if (lua_type(L, -2) == LUA_TNUMBER)
+        {
+            key = std::format("[{}]", lua_tonumber(L, -2));
+        } 
+        else
+        {
+            key = std::format("<{}>", lua_typename(L, lua_type(L, -2)));
+        }
+
+        switch (lua_type(L, -1))
+        {
+        case LUA_TSTRING:
+            value = std::format("\"{}\"", lua_tostring(L, -1));
+            break;
+        case LUA_TNUMBER:
+            value = std::format("{}", lua_tonumber(L, -1));
+            break;
+        case LUA_TBOOLEAN:
+            value = lua_toboolean(L, -1) ? "true" : "false";
+            break;
+        case LUA_TTABLE:
+            value = "table";
+            break;
+        case LUA_TFUNCTION:
+            value = "function";
+            break;
+        case LUA_TUSERDATA:
+            value = "userdata";
+            break;
+        case LUA_TLIGHTUSERDATA:
+            value = "light userdata";
+            break;
+        case LUA_TNIL:
+            value = "nil";
+            break;
+        default:
+            value = "<unknown>";
+            break;
+        }
+
+        output += std::format("{}: {}\n", key, value);
+
+        lua_pop(L, 1);
+    }
+
+    output.pop_back();
+    SO_INFO("{}", output);
 }

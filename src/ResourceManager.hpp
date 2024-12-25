@@ -2,6 +2,7 @@
 #include <map>
 #include <utility>
 #include <filesystem>
+
 #include <lua.hpp>
 #include <SDL3/SDL_gpu.h>
 
@@ -32,18 +33,6 @@ struct SlangcCompileOption
     ShaderDebugLevel        debug_level{ ShaderDebugLevel::None };
 };
 
-struct Script
-{
-    [[nodiscard]] static auto Load(lua_State* L, std::filesystem::path const& path) -> bool;
-    [[nodiscard]] static auto ReadArrayLength(lua_State* L) -> int;
-    static auto PushTable(lua_State* L, const char* key) -> bool;
-    static void Pop(lua_State* L, int n = 1);
-    [[nodiscard]] static auto ReadStringField(lua_State* L, const char* key) -> std::optional<std::string>;
-    [[nodiscard]] static auto ReadFloatingField(lua_State* L, const char* key) -> std::optional<float>;
-    [[nodiscard]] static auto ReadIntegerField(lua_State* L, const char* key) -> std::optional<int>;
-    [[nodiscard]] static auto ReadBooleanField(lua_State* L, const char* key) -> std::optional<bool>;
-};
-
 struct ShaderInfo
 {
     bool                  is_byte_code;
@@ -67,12 +56,15 @@ public:
 
     auto LoadShader(lua_State* L, std::filesystem::path const& path) -> bool;
     auto LoadPipeline(lua_State* L, std::filesystem::path const& path) -> bool;
+    auto LoadModel(std::filesystem::path const& path) -> bool;
 
     [[nodiscard]] auto GetShader(std::string const& name) -> SDL_GPUShader*;
     [[nodiscard]] auto GetPipeline(std::string const& name) -> SDL_GPUGraphicsPipeline*;
 
     [[nodiscard]] static auto Hash(std::string const& str) -> ResouceID;
     static auto Slangc(SlangcCompileOption const& option) -> bool;
+    static void DebugLuaStack(lua_State* L);
+    static void DebugLuaShowTable(lua_State *L);
 private:
     std::string m_root_dir;
     SDL_GPUDevice* m_device;
