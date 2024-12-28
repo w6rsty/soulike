@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
+#include "ResourceManager.hpp"
 
 struct Texture
 {
@@ -18,6 +19,10 @@ public:
 
     auto CreateShader(SDL_GPUShaderCreateInfo const& info) const -> SDL_GPUShader*;
     auto CreateGraphicsPipeline(SDL_GPUGraphicsPipelineCreateInfo const& info) const -> SDL_GPUGraphicsPipeline*;
+
+    auto UploadModel(SDL_GPUCopyPass* pass, std::string const& name) -> ModelInfo const&;
+    void DrawMesh(SDL_GPURenderPass* pass, MeshInfo const& mesh);
+    void DrawModel(SDL_GPURenderPass* pass, ModelInfo const& model);
 
     auto AcquireCmdBuf() -> SDL_GPUCommandBuffer*;
     void SubmitCmdBuf(SDL_GPUCommandBuffer* cmd);

@@ -4,4 +4,5 @@ shader = {
     stage = ShaderStage.Vertex,
     format = ShaderFormat.MSL,
     entry_point = "vertexMain",
+    num_uniform_buffers = 1,
 }

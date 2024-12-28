@@ -1,5 +1,6 @@
 #include "Engine.hpp"
 #include "ResourceManager.hpp"
+#include "SDL3/SDL_gpu.h"
 
 void Engine::Initialize()
 {
@@ -13,7 +14,7 @@ void Engine::Initialize()
     m_rhi.device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, m_rhi.debug_mode, nullptr);
     SDL_ClaimWindowForGPUDevice(m_rhi.device, m_window.handle);
 
-    ResourceManager::Initialize("config", m_rhi.device);
+    ResourceManager::Initialize("/Users/w6rsty/dev/Cpp/soulike/config", m_rhi.device);
 }
 
 void Engine::Destroy()
@@ -45,6 +46,59 @@ auto Engine::CreateShader(SDL_GPUShaderCreateInfo const& info) const -> SDL_GPUS
 auto Engine::CreateGraphicsPipeline(SDL_GPUGraphicsPipelineCreateInfo const& info) const -> SDL_GPUGraphicsPipeline*
 {
     return SDL_CreateGPUGraphicsPipeline(m_rhi.device, &info);
+}
+
+auto Engine::UploadModel(SDL_GPUCopyPass* pass, std::string const& name) -> ModelInfo const&
+{
+    auto& mgr = ResourceManager::Instance();
+    auto const& model = mgr.GetModel(name);
+    
+    uint32_t offset{ 0 };
+    for (auto const& mesh : model.meshes)
+    {
+        for (auto const& buffer : mesh.buffers)
+        {
+            SDL_GPUTransferBufferLocation location{
+                .transfer_buffer = model.transfer_buffer,
+                .offset = offset,
+            };
+            SDL_GPUBufferRegion region{
+                .buffer = buffer.first,
+                .offset = 0,
+                .size = buffer.second,
+            };
+            SDL_UploadToGPUBuffer(pass, &location, &region, false);
+            offset += buffer.second;
+        }
+    }
+    mgr.SetModelStatus(name, true);
+    return model;
+}
+
+void Engine::DrawMesh(SDL_GPURenderPass* pass, MeshInfo const& mesh)
+{
+    std::vector<SDL_GPUBufferBinding> vertex_bindings(mesh.buffers.size() - 1);
+    for (size_t i{ 0 }; i < vertex_bindings.size(); ++i)
+    {
+        vertex_bindings[i].buffer = mesh.buffers[i].first;
+        vertex_bindings[i].offset = 0;
+    }
+    SDL_BindGPUVertexBuffers(pass, 0, vertex_bindings.data(), static_cast<uint32_t>(vertex_bindings.size()));
+    SDL_GPUBufferBinding index_binding{ mesh.buffers.back().first, 0 };
+    SDL_BindGPUIndexBuffer(pass, &index_binding, mesh.index_type);
+    SDL_DrawGPUIndexedPrimitives(pass, static_cast<uint32_t>(mesh.index_count), 1, 0, 0, 0);
+}
+
+void Engine::DrawModel(SDL_GPURenderPass* pass, ModelInfo const& model)
+{
+    if (!model.active)
+    {
+        return;
+    }
+    for (auto const& mesh : model.meshes)
+    {
+        DrawMesh(pass, mesh);
+    }
 }
 
 auto Engine::AcquireCmdBuf() -> SDL_GPUCommandBuffer*

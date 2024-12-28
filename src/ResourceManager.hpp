@@ -2,7 +2,6 @@
 #include <map>
 #include <utility>
 #include <filesystem>
-
 #include <lua.hpp>
 #include <SDL3/SDL_gpu.h>
 
@@ -45,6 +44,20 @@ struct ShaderInfo
     uint32_t              num_uniform_buffers;
 };
 
+struct MeshInfo
+{
+    std::vector<std::pair<SDL_GPUBuffer*, uint32_t>> buffers;
+    size_t                                           index_count;
+    SDL_GPUIndexElementSize                          index_type;
+};
+
+struct ModelInfo
+{
+    std::vector<MeshInfo>  meshes;
+    SDL_GPUTransferBuffer* transfer_buffer;
+    bool                   active;
+};
+
 using ResouceID = std::size_t;
 
 class ResourceManager
@@ -56,18 +69,21 @@ public:
 
     auto LoadShader(lua_State* L, std::filesystem::path const& path) -> bool;
     auto LoadPipeline(lua_State* L, std::filesystem::path const& path) -> bool;
-    auto LoadModel(std::filesystem::path const& path) -> bool;
+    auto LoadModelGroup(lua_State* L, std::filesystem::path const& path) -> bool;
 
     [[nodiscard]] auto GetShader(std::string const& name) -> SDL_GPUShader*;
     [[nodiscard]] auto GetPipeline(std::string const& name) -> SDL_GPUGraphicsPipeline*;
+    [[nodiscard]] auto GetModel(std::string const& name) -> ModelInfo const&;
+    void SetModelStatus(std::string const& name, bool status);
 
     [[nodiscard]] static auto Hash(std::string const& str) -> ResouceID;
     static auto Slangc(SlangcCompileOption const& option) -> bool;
     static void DebugLuaStack(lua_State* L);
     static void DebugLuaShowTable(lua_State *L);
 private:
-    std::string m_root_dir;
-    SDL_GPUDevice* m_device;
+    std::string                                                m_root_dir;
+    SDL_GPUDevice*                                             m_device;
     std::map<ResouceID, std::pair<ShaderInfo, SDL_GPUShader*>> m_shaders;
-    std::map<ResouceID, SDL_GPUGraphicsPipeline*> m_pipelines;
+    std::map<ResouceID, SDL_GPUGraphicsPipeline*>              m_pipelines;
+    std::map<ResouceID, ModelInfo>                             m_models;
 };

@@ -1,10 +1,3 @@
-#define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define JSON_NOEXCEPTION
-#define TINYGLTF_NOEXCEPTION
-#include <tiny_gltf.h>
-
 #include "ResourceManager.hpp"
 #include "Logger.hpp"
 
@@ -63,6 +56,16 @@ void ResourceManager::Initialize(std::filesystem::path const& root, SDL_GPUDevic
             s_instance->LoadPipeline(s_lua_state, path);
         }
     }
+
+    std::filesystem::path models_dir = root/"models";
+    for (auto& entry : std::filesystem::directory_iterator(models_dir))
+    {
+        std::filesystem::path path = entry.path();
+        if (path.extension().string() == ".lua")
+        {
+            s_instance->LoadModelGroup(s_lua_state, path);
+        }
+    }
 }
 
 auto ResourceManager::Instance() -> ResourceManager&
@@ -87,24 +90,13 @@ void ResourceManager::Destroy()
         s_instance->m_root_dir.clear();
         s_instance->m_shaders.clear();
         s_instance->m_pipelines.clear();
+        s_instance->m_device = nullptr;
 
         delete s_instance;
         lua_close(s_lua_state);
         s_instance = nullptr;
         s_lua_state = nullptr;
     }
-}
-
-auto ResourceManager::LoadModel(std::filesystem::path const& path) -> bool
-{
-    tinygltf::Model model{};
-    tinygltf::TinyGLTF loader{};
-    std::string err{};
-    std::string warn{};
-    bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
-
-
-    return ret;
 }
 
 auto ResourceManager::GetShader(std::string const& name) -> SDL_GPUShader*
@@ -117,6 +109,15 @@ auto ResourceManager::GetPipeline(std::string const& name) -> SDL_GPUGraphicsPip
     return m_pipelines[Hash(name)];
 }
 
+auto ResourceManager::GetModel(std::string const& name) -> ModelInfo const&
+{
+    return m_models[Hash(name)];
+}
+
+void ResourceManager::SetModelStatus(std::string const& name, bool status)
+{
+    m_models[Hash(name)].active = status;
+}
 
 auto ResourceManager::Hash(const std::string &str) -> ResouceID
 {

@@ -18,7 +18,7 @@ private:
 struct Script
 {
     [[nodiscard]] static auto Load(lua_State* L, std::filesystem::path const& path) -> bool;
-    [[nodiscard]] static auto ReadArrayLength(lua_State* L) -> int;
+    [[nodiscard]] static auto ReadArrayLength(lua_State* L) -> uint32_t;
     [[nodiscard]] static auto ReadStringField(lua_State* L, char const* key) -> std::optional<std::string>;
     [[nodiscard]] static auto ReadFloatingField(lua_State* L, char const* key) -> std::optional<float>;
     [[nodiscard]] static auto ReadIntegerField(lua_State* L, char const* key) -> std::optional<int>;

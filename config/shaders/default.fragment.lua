@@ -4,5 +4,4 @@ shader = {
     stage = ShaderStage.Fragment,
     format = ShaderFormat.MSL,
     entry_point = "fragmentMain",
-    num_uniform_buffers = 1,
 }

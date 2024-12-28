@@ -1,7 +1,9 @@
 #include <SDL3/SDL_gpu.h>
+#include <cstdint>
 #include "ResourceManager.hpp"
 #include "Logger.hpp"
 #include "Script.hpp"
+#include "GLTFHelper.hpp"
 
 LuaTableScope::LuaTableScope(lua_State* L, char const* table, bool is_global, bool required)
     : m_state(L)
@@ -61,9 +63,9 @@ auto LuaTableScope::IsValid() const -> bool
     return m_valid;
 }
 
-auto Script::ReadArrayLength(lua_State* L) -> int
+auto Script::ReadArrayLength(lua_State* L) -> uint32_t
 {
-    return lua_rawlen(L, -1);
+    return static_cast<uint32_t>(lua_rawlen(L, -1));
 }
 
 auto Script::Load(lua_State* L, std::filesystem::path const& path) -> bool
@@ -109,7 +111,7 @@ auto Script::ReadIntegerField(lua_State* L, char const* key) -> std::optional<in
         lua_pop(L, 1);
         return std::nullopt;
     }
-    int value = lua_tointeger(L, -1);
+    int value = static_cast<int>(lua_tointeger(L, -1));
     lua_pop(L, 1);
     return value;
 }
@@ -176,7 +178,7 @@ auto ResourceManager::LoadShader(
         }
 
         std::filesystem::path output_path = std::format(
-            "build/shaders/metal/{}.{}",
+            "/Users/w6rsty/dev/Cpp/soulike/build/shaders/metal/{}.{}",
             path.stem().string(),
             format_suffix);
         std::filesystem::create_directories(output_path.parent_path());
@@ -392,7 +394,6 @@ auto ResourceManager::LoadPipeline(
                     {
                         uint32_t num_color_targets = Script::ReadArrayLength(L);
                         color_target_descriptions.resize(num_color_targets);
-
                         for (uint32_t i = 0; i < num_color_targets; ++i)
                         {
                             {   
@@ -441,5 +442,106 @@ auto ResourceManager::LoadPipeline(
     m_pipelines[ResourceManager::Hash(path.stem().string())] = pipeline;
     SO_INFO("Pipeline loaded: {}", path.stem().string());
 
+    return true;
+}
+
+auto ResourceManager::LoadModelGroup(lua_State* L, std::filesystem::path const& path) -> bool
+{
+    if (!Script::Load(L, path))
+    {
+        return false;
+    }
+
+    {
+        LuaTableScope model_scope(L, "model_group");
+        if (!model_scope.IsValid())
+        {
+            return false;
+        }
+
+        GLTFHelper gltf_helper{};
+
+        uint32_t model_count = Script::ReadArrayLength(L);
+        for (uint32_t i{ 0 }; i < model_count; ++i)
+        {
+            {   
+                LuaTableScope i_scope(L, i + 1);
+                if (i_scope.IsValid())
+                {
+                    std::string model_name = Script::ReadStringField(L, "name").value_or("");
+                    std::filesystem::path model_path = Script::ReadStringField(L, "path").value_or("");
+                    
+                    auto const& [model_size, meshes] = gltf_helper.Load(model_path);
+
+                    // prepare transfer buffer
+                    SDL_GPUTransferBufferCreateInfo transfer_buffer_info{
+                        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+                        .size = model_size,
+                    };
+                    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(m_device, &transfer_buffer_info);
+                    void* transfer_buffer_data = SDL_MapGPUTransferBuffer(m_device, transfer_buffer, false);
+                    size_t transfer_buffer_offset{ 0 };
+                    
+                    ModelInfo model_info{};
+                    model_info.meshes.reserve(meshes.size());
+                    for (auto const& mesh : meshes)
+                    {
+                        MeshInfo mesh_info{};
+                        for (size_t i{ 0 }; i < mesh.attributes.size() - 1; ++i)
+                        {
+                            auto const& attribute = mesh.attributes[i];
+                            SDL_GPUBufferCreateInfo buffer_info{
+                                .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                .size = static_cast<uint32_t>(attribute.byte_size),
+                            };
+                            SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(m_device, &buffer_info);
+                            mesh_info.buffers.push_back({
+                                buffer,
+                                static_cast<uint32_t>(attribute.byte_size),
+                            });
+                            SDL_SetGPUBufferName(m_device, buffer, model_name.c_str());
+                            std::memcpy(
+                                static_cast<uint8_t*>(transfer_buffer_data) + transfer_buffer_offset,
+                                attribute.data_section + attribute.byte_offset,
+                                attribute.byte_size
+                            );
+                            transfer_buffer_offset += attribute.byte_size;
+                        }
+
+                        auto const& index_buffer_attribute = mesh.attributes[2];
+                        SDL_GPUBufferCreateInfo index_buffer_info{
+                            .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                            .size = static_cast<uint32_t>(index_buffer_attribute.byte_size),
+                        };
+                        SDL_GPUBuffer* index_buffer = SDL_CreateGPUBuffer(m_device, &index_buffer_info);
+                        assert(index_buffer);
+                        mesh_info.buffers.push_back({
+                            index_buffer,
+                            static_cast<uint32_t>(index_buffer_attribute.byte_size),
+                        });
+                        mesh_info.index_count = mesh.index_count;
+                        mesh_info.index_type = mesh.index_type;
+                        SDL_SetGPUBufferName(m_device, index_buffer, model_name.c_str());
+                        std::memcpy(
+                            static_cast<uint8_t*>(transfer_buffer_data) + transfer_buffer_offset,
+                            index_buffer_attribute.data_section + index_buffer_attribute.byte_offset,
+                            index_buffer_attribute.byte_size
+                        );
+                        transfer_buffer_offset += index_buffer_attribute.byte_size;
+
+                        model_info.meshes.push_back(mesh_info);
+                    }
+
+                    SDL_UnmapGPUTransferBuffer(m_device, transfer_buffer);
+                    model_info.transfer_buffer = transfer_buffer;
+
+                    m_models[ResourceManager::Hash(model_name)] = model_info;
+                    
+                    gltf_helper.Clear();
+                }
+            } // i_scope
+        }
+    } // model_scope
+    
     return true;
 }
