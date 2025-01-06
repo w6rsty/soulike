@@ -7,22 +7,6 @@
 #include "Engine.hpp"
 #include "Logger.hpp"
 #include "CameraController.hpp"
-#include "SDL3/SDL_timer.h"
-
-void FormatMat(glm::mat4 const& mat)
-{
-    std::string output = "Matrix:\n";
-    for (int i = 0; i < 4; ++i)
-    {
-        for (int j = 0; j < 4; ++j)
-        {
-            output += std::format("{:.2f} ", mat[i][j]);
-        }
-        output += "\n";
-    }
-    output.pop_back();
-    SO_INFO("{}", output);
-}
 
 struct alignas(16) CBuffer
 {
@@ -59,12 +43,11 @@ int main(int argc, char *argv[])
     engine.SubmitCmdBuf(copy_cmd);
 
     Camera camera;
-    camera.SetPerspectiveParams(45.0f, 800.0f / 600.0f, 0.1f, 100.0f);
+    camera.SetPerspectiveParams(glm::radians(30.0f), 800.0f / 600.0f, 0.1f, 100.0f);
     CameraController controller(&camera);
     controller.SetMoveSpeed(0.1f);
     controller.SetRotateSpeed(0.1f);
     cbuffer.projection = camera.GetProjectionMatrix();
-    FormatMat(cbuffer.projection);
     
     bool running = true;
     while (running) {
@@ -130,6 +113,7 @@ int main(int argc, char *argv[])
         controller.Update((SDL_GetTicks() - last_tick) / 100.0f);
         last_tick = SDL_GetTicks();
 
+
         SDL_GPUCommandBuffer* cmd = engine.AcquireCmdBuf();
     
         Texture const& present_texture = engine.AcquireSwapchainImage(cmd);
@@ -144,7 +128,7 @@ int main(int argc, char *argv[])
                 .store_op = SDL_GPUStoreOp::SDL_GPU_STOREOP_STORE,
                 .resolve_mip_level = 0,
                 .resolve_layer = 0,
-                .cycle = true,
+                .cycle = false,
                 .cycle_resolve_texture = false,
             }
         };
@@ -171,8 +155,8 @@ int main(int argc, char *argv[])
         cbuffer.time = SDL_GetTicks() / 1000.0f;
         cbuffer.view = camera.GetViewMatrix();
         SDL_PushGPUVertexUniformData(cmd, 0, &cbuffer, sizeof(CBuffer));
+        // SDL_PushGPUFragmentUniformData(cmd, 0, &ubo, sizeof(UBO));
         engine.DrawModel(render_pass, bunny);
-        // engine.DrawModel(render_pass, happy);
         SDL_EndGPURenderPass(render_pass);
 
         engine.SubmitCmdBuf(cmd);

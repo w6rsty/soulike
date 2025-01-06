@@ -1,3 +1,4 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include "Camera.hpp"
 
 Camera::Camera()
@@ -36,7 +37,6 @@ auto Camera::GetProjectionType() const -> ProjectionType
     return m_projection_type;
 }
 
-
 void Camera::SetPerspectiveParams(float fovY, float aspect, float nearZ, float farZ)
 {
     m_fov_y   = fovY;
@@ -51,10 +51,10 @@ void Camera::SetPerspectiveParams(float fovY, float aspect, float nearZ, float f
 
 void Camera::SetOrthoParams(float left, float right, float bottom, float top, float nearZ, float farZ)
 {
-    m_left  = left;
-    m_right = right;
-    m_bottom = bottom;
-    m_top    = top;
+    m_ortho_left  = left;
+    m_ortho_right = right;
+    m_ortho_bottom = bottom;
+    m_ortho_top    = top;
     m_near_z  = nearZ;
     m_far_z   = farZ;
     if (m_projection_type == ProjectionType::Orthographic)
@@ -74,7 +74,7 @@ void Camera::RecalcProjection()
         }
     case ProjectionType::Orthographic:
         {
-            m_projection = glm::orthoLH_ZO(m_left, m_right, m_bottom, m_top, m_near_z, m_far_z);
+            m_projection = glm::orthoLH_ZO(m_ortho_left, m_ortho_right, m_ortho_bottom, m_ortho_top, m_near_z, m_far_z);
             break;
         }
     }

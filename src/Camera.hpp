@@ -12,7 +12,7 @@ enum class ProjectionType
 class Camera
 {
 public:
-    Camera();
+         Camera();
 
     void SetPosition(glm::vec3 const& pos);
     auto GetPosition() const -> glm::vec3 const&;
@@ -43,10 +43,10 @@ private:
     float m_near_z  = 0.1f;
     float m_far_z   = 100.f;
 
-    float m_left   = -10.f;
-    float m_right  =  10.f;
-    float m_bottom = -10.f;
-    float m_top    =  10.f;
+    float m_ortho_left   = -10.f;
+    float m_ortho_right  =  10.f;
+    float m_ortho_bottom = -10.f;
+    float m_ortho_top    =  10.f;
     float m_far_z_ortho   = 100.f;
 
     glm::mat4 m_projection = glm::mat4(1.f);
